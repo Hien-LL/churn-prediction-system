@@ -1,0 +1,256 @@
+/* src/pages/Predict.css */
+.predict-container {
+  padding: 24px;
+  width: 100%;
+}
+
+.predict-header {
+  margin-bottom: 24px;
+}
+
+.predict-header h1 {
+  font-size: 24px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 4px 0;
+}
+
+.predict-header p {
+  font-size: 14px;
+  color: #64748b;
+  margin: 0;
+}
+
+.predict-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 24px;
+  align-items: start;
+}
+
+/* Common Card Style */
+.predict-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  margin-bottom: 24px;
+}
+
+.predict-card-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #0f172a;
+  margin: 0 0 20px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 1. Form Styles */
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group.full-width {
+  grid-column: span 2;
+}
+
+.form-group label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.form-group input,
+.form-group select {
+  padding: 10px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #0f172a;
+  outline: none;
+  background-color: #ffffff;
+  transition: all 0.2s;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.predict-btn {
+  width: 100%;
+  margin-top: 20px;
+  padding: 12px;
+  background-color: #2563eb;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: background-color 0.2s;
+}
+
+.predict-btn:hover {
+  background-color: #1d4ed8;
+}
+
+/* 2. Risk Gauge Card */
+.gauge-wrapper {
+  position: relative;
+  width: 100%;
+  height: 180px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+}
+
+.gauge-center-info {
+  position: absolute;
+  bottom: 20px;
+  text-align: center;
+}
+
+.gauge-percentage {
+  font-size: 36px;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1;
+}
+
+.gauge-subtitle {
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 4px;
+}
+
+/* 3. SHAP Chart Styles */
+.shap-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.shap-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.shap-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 500;
+  color: #334155;
+}
+
+.shap-impact {
+  font-weight: 600;
+}
+
+.shap-impact.positive {
+  color: #dc2626; /* Tăng rủi ro rời đi */
+}
+
+.shap-impact.negative {
+  color: #16a34a; /* Giảm rủi ro rời đi */
+}
+
+.shap-bar-bg {
+  width: 100%;
+  height: 8px;
+  background-color: #f1f5f9;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.shap-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+
+/* 4. Retention Action Cards */
+.action-cards-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.action-card-item {
+  border: 1px solid #e2e8f0;
+  border-left: 4px solid #2563eb;
+  border-radius: 8px;
+  padding: 16px;
+  background-color: #f8fafc;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.action-info h4 {
+  margin: 0 0 4px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.action-info p {
+  margin: 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.action-badge {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  background-color: #dcfce7;
+  color: #15803d;
+}
+
+.apply-action-btn {
+  padding: 8px 14px;
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #2563eb;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.apply-action-btn:hover {
+  background-color: #eff6ff;
+  border-color: #2563eb;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .predict-grid {
+    grid-template-columns: 1fr;
+  }
+}
