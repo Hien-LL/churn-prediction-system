@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Sliders, Activity, BarChart2, ShieldAlert, Sparkles, CheckCircle2 } from 'lucide-react';
 import ChurnRiskBadge from '../components/common/ChurnRiskBadge';
+import axios from 'axios';
 import './Predict.css';
 
 const Predict = () => {
@@ -89,26 +90,59 @@ const Predict = () => {
   };
 
   // Handler Chạy Mô hình Dự đoán
-  const handlePredict = (e) => {
-    e.preventDefault();
-    // Logic tính toán mô phỏng khi người dùng bấm Re-predict
-    let calculatedProb = 50;
-    if (formData.contractType === 'Month-to-month') calculatedProb += 25;
-    if (formData.contractType === 'Two year') calculatedProb -= 30;
-    if (Number(formData.tenure) < 6) calculatedProb += 15;
-    if (formData.techSupport === 'No') calculatedProb += 10;
+  const handlePredict = async (e) => {
+  e.preventDefault();
+  setIsLoading(true);
 
-    calculatedProb = Math.min(Math.max(calculatedProb, 5), 98);
+  try {
+    // 1. Chuẩn bị dữ liệu gửi xuống Backend
+    // Lưu ý: Đảm bảo payload này khớp với schema Pydantic ở FastAPI
+    const payload = {
+        tenure: Number(formData.tenure),
+        MonthlyCharges: Number(formData.monthlyCharges),
+        TotalCharges: Number(formData.totalCharges),
+        Contract: formData.contractType,
+        InternetService: formData.internetService,
+        TechSupport: formData.techSupport,
+        PaymentMethod: formData.paymentMethod
+    };
+
+    // 2. Gọi API đến FastAPI (Sửa lại URL nếu port của bạn khác)
+    const response = await axios.post('http://localhost:8000/api/predict', payload);
     
-    let level = 'Low';
-    if (calculatedProb >= 70) level = 'High';
-    else if (calculatedProb >= 40) level = 'Medium';
-
+    const { churnProbability, shapValues } = response.data;
+    
+    const probPercentage = Math.round(churnProbability * 100);
+    
     setPrediction({
-      churnProbability: calculatedProb,
-      riskLevel: level,
+      churnProbability: probPercentage,
+      riskLevel: probPercentage >= 70 ? 'High' : probPercentage >= 40 ? 'Medium' : 'Low',
     });
-  };
+
+    // 4. Transform dữ liệu SHAP từ Object thành Array để vẽ biểu đồ
+    // Lọc, sắp xếp lấy top 5 yếu tố ảnh hưởng mạnh nhất (cả âm và dương)
+    const transformedShap = Object.entries(shapValues)
+      .map(([feature, impactValue]) => {
+         // Quy đổi giá trị SHAP ra phần trăm tác động giả định (tùy thuộc vào model của bạn)
+         const impactScore = Math.round(impactValue * 100); 
+         return {
+            feature: feature,
+            impact: impactScore,
+            isPositive: impactScore > 0 
+         };
+      })
+      .sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact)) 
+      .slice(0, 5); 
+
+    setShapData(transformedShap);
+
+  } catch (error) {
+    console.error("Lỗi khi gọi API dự đoán:", error);
+    alert("Không thể kết nối đến hệ thống AI. Vui lòng kiểm tra backend.");
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   // Handler áp dụng hành động giữ chân
   const handleApplyAction = (id) => {
@@ -136,6 +170,8 @@ const Predict = () => {
       default: return '#3b82f6';
     }
   };
+
+  const [isLoading, setIsLoading] = useState(false);
 
   return (
     <div className="predict-container">
@@ -213,9 +249,9 @@ const Predict = () => {
               </div>
             </div>
 
-            <button type="submit" className="predict-btn">
+            <button type="submit" className="predict-btn" disabled={isLoading}>
               <Activity size={18} />
-              Run Prediction Model
+              {isLoading ? 'Running AI Model...' : 'Run Prediction Model'}
             </button>
           </form>
         </div>

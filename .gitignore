@@ -6,35 +6,48 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Dependencies (Thư viện phụ thuộc - tuyệt đối không push)
-/node_modules
-/.pnp
+# Dependencies
+node_modules/
+.pnp
 .pnp.js
 
-# Production Build Outputs (Thư mục sau khi build)
-/dist
-/build
+# Production Build Outputs
+dist/
+build/
 
-# Environment Variables (Thông tin bảo mật / API Key)
+# Environment Variables
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
 
+# VS Code
 .vscode/*
 !.vscode/extensions.json
-.idea
+
+# IDE
+.idea/
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
 
+# macOS
 .DS_Store
 .DS_Store?
 ._*
 .Spotlight-V100
 .Trashes
+
+# Windows
 ehthumbs.db
 Thumbs.db
+
+# Python virtual environment
+backend/venv/
+
+# Python
+__pycache__/
+*.py[cod]
