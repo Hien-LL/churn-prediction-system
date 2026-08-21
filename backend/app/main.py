@@ -1,27 +1,33 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.router import router
-from app.services.ml_service import load_model
 
-app = FastAPI(title="Telco Churn Prediction API", version="1.0")
+# Import router từ file app/api/router.py
+from app.api.router import router as api_router
 
-# Cấu hình CORS cho Frontend gọi
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Trong thực tế nên đổi "*" thành URL của frontend (VD: http://localhost:3000)
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+# Khởi tạo ứng dụng FastAPI
+app = FastAPI(
+    title="Telco Customer Churn Prediction API",
+    description="API dự đoán tỉ lệ rời bỏ của khách hàng dựa trên mô hình RandomForest.",
+    version="1.0.0"
 )
 
-# Load model ngay khi server khởi động
-@app.on_event("startup")
-async def startup_event():
-    load_model()
 
-# Đăng ký router
-app.include_router(router, prefix="/api")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], 
+    allow_credentials=True,
+    allow_methods=["*"],  
+    allow_headers=["*"], 
+)
 
-@app.get("/")
-def read_root():
-    return {"message": "Backend FastAPI is running!"}
+# Gắn router đã tạo vào ứng dụng gốc, thêm tiền tố /api/v1
+app.include_router(api_router, prefix="/api/v1", tags=["Prediction"])
+
+# Endpoint kiểm tra sức khỏe của Server (Health Check)
+@app.get("/", tags=["Health Check"])
+def root():
+    return {
+        "status": "success",
+        "message": "Backend API đang hoạt động bình thường!",
+        "docs_url": "/docs" # Đường dẫn tới trang test API tự động
+    }
