@@ -6,15 +6,86 @@ import ChurnRiskBadge from '../components/common/ChurnRiskBadge';
 import axios from 'axios';
 import './Predict.css';
 
+// === BƯỚC 1: THÊM HÀM RULE ENGINE Ở ĐÂY (Ngoài component Predict) ===
+const generateRecommendations = (shapData) => {
+  const dynamicActions = [];
+  let actionId = 1;
+
+  // Lấy những yếu tố làm TĂNG nguy cơ Churn (isPositive = true)
+  const riskDrivers = shapData.filter(item => item.isPositive);
+
+  riskDrivers.forEach(driver => {
+    const featureName = driver.feature.toLowerCase();
+
+    // Hợp đồng ngắn hạn
+    if (featureName.includes('month-to-month') || featureName.includes('tháng') || featureName.includes('contract')) {
+      dynamicActions.push({
+        id: actionId++,
+        title: 'Khuyến mãi chuyển sang Hợp đồng 1 năm',
+        desc: 'Giảm 15% cước phí hàng tháng nếu khách hàng cam kết gia hạn 12 tháng.',
+        riskReduction: '-25% Churn Risk',
+        impactValue: 25, 
+        applied: false
+      });
+    }
+    // Cước phí cao
+    else if (featureName.includes('monthly charges') || featureName.includes('cước phí')) {
+      dynamicActions.push({
+        id: actionId++,
+        title: 'Tặng Voucher giảm giá cước',
+        desc: 'Giảm trực tiếp $10/tháng trong vòng 3 tháng tiếp theo để giảm áp lực tài chính.',
+        riskReduction: '-15% Churn Risk',
+        impactValue: 15,
+        applied: false
+      });
+    }
+    // Thiếu Tech Support
+    else if (featureName.includes('tech support') || featureName.includes('hỗ trợ kỹ thuật')) {
+      dynamicActions.push({
+        id: actionId++,
+        title: 'Tặng miễn phí gói Tech Support (6 tháng)',
+        desc: 'Hỗ trợ kỹ thuật VIP 24/7 hoàn toàn miễn phí để cải thiện trải nghiệm.',
+        riskReduction: '-12% Churn Risk',
+        impactValue: 12,
+        applied: false
+      });
+    }
+    // Thanh toán check thủ công
+    else if (featureName.includes('electronic check') || featureName.includes('payment')) {
+      dynamicActions.push({
+        id: actionId++,
+        title: 'Hướng dẫn đăng ký Thanh toán tự động',
+        desc: 'Tặng ngay $5 vào tài khoản khi khách hàng liên kết thẻ Visa/Mastercard tự động.',
+        riskReduction: '-5% Churn Risk',
+        impactValue: 5,
+        applied: false
+      });
+    }
+  });
+
+  // Nếu không có rule nào match, hiển thị mặc định
+  if (dynamicActions.length === 0) {
+    dynamicActions.push({
+      id: actionId++,
+      title: 'Chương trình Tri ân Khách hàng VIP',
+      desc: 'Tặng gói nâng cấp băng thông Internet miễn phí hoặc điểm tích lũy đổi quà.',
+      riskReduction: '-10% Churn Risk',
+      impactValue: 10,
+      applied: false
+    });
+  }
+
+  return dynamicActions.slice(0, 3); // Trả về tối đa 3 gợi ý
+};
+// ===================================================================
+
 const Predict = () => {
   const location = useLocation();
   const selectedCustomer = location.state?.customer;
 
-  // 1. State kiểm soát hiển thị kết quả (Mặc định ẩn)
   const [hasPredicted, setHasPredicted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  // 2. State Quản lý Form Nhập Liệu
   const [formData, setFormData] = useState({
     customerId: 'CUST_100023',
     name: 'Michael Brown',
@@ -42,25 +113,18 @@ const Predict = () => {
         techSupport: selectedCustomer.techSupport || 'No',
         onlineSecurity: selectedCustomer.onlineSecurity || 'No',
       });
-      // Nếu đi từ trang Customer sang, bạn có thể cho hiện kết quả luôn hoặc bắt user bấm. 
-      // Ở đây mình vẫn reset để user bấm nút.
       setHasPredicted(false);
     }
   }, [selectedCustomer]);
 
-  // 3. State Kết quả Dự đoán & SHAP Values
   const [prediction, setPrediction] = useState({
     churnProbability: 0,
     riskLevel: 'Low',
   });
   const [shapData, setShapData] = useState([]);
 
-  // Danh sách đề xuất Retain Action (Có thể reset lại khi predict mới)
-  const [actions, setActions] = useState([
-    { id: 1, title: 'Khuyến mãi chuyển sang Hợp đồng 1 năm', desc: 'Giảm 15% cước phí hàng tháng nếu khách hàng cam kết gia hạn 12 tháng.', riskReduction: '-25% Churn Risk', applied: false },
-    { id: 2, title: 'Tặng miễn phí gói Tech Support (6 tháng)', desc: 'Hỗ trợ kỹ thuật 24/7 giúp tăng độ hài lòng cho gói Fiber Optic.', riskReduction: '-12% Churn Risk', applied: false },
-    { id: 3, title: 'Hướng dẫn đăng ký Thanh toán tự động', desc: 'Tặng 5$ cước tháng đầu khi liên kết thẻ ngân hàng/chuyển khoản tự động.', riskReduction: '-5% Churn Risk', applied: false },
-  ]);
+  // State actions bắt đầu rỗng, sẽ được điền khi bấm Predict
+  const [actions, setActions] = useState([]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -70,10 +134,9 @@ const Predict = () => {
   const handlePredict = async (e) => {
     e.preventDefault();
     setIsLoading(true);
-    setHasPredicted(false); // Ẩn kết quả cũ đi khi đang load
+    setHasPredicted(false);
 
     try {
-      // Gắn thêm các dữ liệu mặc định để đủ 19 trường gửi cho Backend
       const payload = {
         SeniorCitizen: 0,
         gender: "Female",
@@ -87,8 +150,6 @@ const Predict = () => {
         StreamingTV: "Yes",
         StreamingMovies: "No",
         PaperlessBilling: "Yes",
-        
-        // Các trường lấy từ form người dùng
         tenure: Number(formData.tenure),
         MonthlyCharges: Number(formData.monthlyCharges),
         TotalCharges: Number(formData.totalCharges),
@@ -98,10 +159,7 @@ const Predict = () => {
         PaymentMethod: formData.paymentMethod
       };
 
-      // Lưu ý: URL đổi thành /api/v1/predict theo code backend bạn đã chạy
       const response = await axios.post('http://127.0.0.1:8000/api/v1/predict', payload);
-      
-      // Dữ liệu thật từ Backend (đã cấu hình ở bước trước)
       const data = response.data;
       
       setPrediction({
@@ -109,18 +167,23 @@ const Predict = () => {
         riskLevel: data.risk_level,
       });
 
-      // *TẠM THỜI*: Vì backend hiện tại chưa trả về SHAP value, ta dùng dữ liệu mock để vẽ biểu đồ
-      setShapData([
+      // Tạm thời dùng mock data cho SHAP
+      const mockShapData = [
         { feature: 'Month-to-month Contract', impact: +28, isPositive: true },
         { feature: `Monthly Charges ($${formData.monthlyCharges})`, impact: +22, isPositive: true },
         { feature: `Tenure (${formData.tenure} months)`, impact: +18, isPositive: true },
         { feature: 'No Tech Support', impact: +12, isPositive: true },
         { feature: 'Electronic check payment', impact: +8, isPositive: true },
-      ]);
+      ];
+      
+      setShapData(mockShapData);
 
-      // Bật cờ hiển thị kết quả
+      // === BƯỚC 2: GỌI HÀM SINH ĐỀ XUẤT ĐỘNG Ở ĐÂY ===
+      const dynamicRecommendations = generateRecommendations(mockShapData);
+      setActions(dynamicRecommendations);
+      // ==============================================
+
       setHasPredicted(true);
-
     } catch (error) {
       console.error("Lỗi khi gọi API dự đoán:", error);
       alert("Không thể kết nối đến Backend FastAPI. Vui lòng kiểm tra server.");
@@ -129,21 +192,24 @@ const Predict = () => {
     }
   };
 
+  // === BƯỚC 3: CẬP NHẬT HÀM APPLY ACTION ===
   const handleApplyAction = (id) => {
     setActions(prev => prev.map(a => a.id === id ? { ...a, applied: true } : a));
-    setPrediction(prev => {
-      const newProb = Math.max(10, prev.churnProbability - 15);
-      return {
-        churnProbability: newProb,
-        riskLevel: newProb >= 70 ? 'High' : newProb >= 40 ? 'Medium' : 'Low',
-      };
-    });
+    
+    // Tìm action để lấy impactValue trừ đi
+    const appliedAction = actions.find(a => a.id === id);
+    if (appliedAction) {
+      setPrediction(prev => {
+        // Trừ đi % rủi ro, không cho giảm dưới 5%
+        const newProb = Math.max(5, prev.churnProbability - appliedAction.impactValue);
+        return {
+          churnProbability: newProb,
+          riskLevel: newProb >= 70 ? 'High' : newProb >= 40 ? 'Medium' : 'Low',
+        };
+      });
+    }
   };
-
-  const gaugeData = [
-    { name: 'Risk', value: prediction.churnProbability },
-    { name: 'Remaining', value: 100 - prediction.churnProbability },
-  ];
+  // =========================================
 
   const getGaugeColor = (level) => {
     switch (level?.toLowerCase()) {
@@ -161,7 +227,7 @@ const Predict = () => {
       </div>
 
       <div className="predict-grid">
-        {/* ---------------- CỘT 1: FORM NHẬP LIỆU (Luôn hiển thị) ---------------- */}
+        {/* CỘT 1: FORM */}
         <div className="predict-col">
           <div className="predict-card">
             <h3 className="predict-card-title text-blue-600 font-bold">
@@ -219,12 +285,10 @@ const Predict = () => {
           </div>
         </div>
 
-        {/* ---------------- CỘT 2 & 3: KẾT QUẢ (Chỉ hiển thị khi có kết quả) ---------------- */}
+        {/* CỘT 2 & 3 */}
         {hasPredicted && (
           <>
-            {/* CỘT 2: KẾT QUẢ DỰ ĐOÁN & BIỂU ĐỒ SHAP */}
             <div className="predict-col flex flex-col gap-4">
-              {/* Step 2 */}
               <div className="predict-card" style={{ backgroundColor: '#fef2f2', border: '1px solid #fca5a5' }}>
                 <h3 className="predict-card-title font-bold">
                   <span className="step-number text-blue-600 mr-2">2.</span> Prediction Result
@@ -238,7 +302,6 @@ const Predict = () => {
                 </div>
               </div>
 
-              {/* Step 3 */}
               <div className="predict-card flex-grow">
                 <h3 className="predict-card-title font-bold">
                   <span className="step-number text-blue-600 mr-2">3.</span> Why is this customer at risk?
@@ -264,7 +327,6 @@ const Predict = () => {
               </div>
             </div>
 
-            {/* CỘT 3: HÀNH ĐỘNG GIỮ CHÂN */}
             <div className="predict-col">
               <div className="predict-card h-full">
                 <h3 className="predict-card-title font-bold">
