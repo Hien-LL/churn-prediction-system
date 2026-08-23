@@ -1,12 +1,23 @@
 // frontend/src/services/api.js
-import axios from 'axios';
 
-const API_URL = 'http://localhost:8000/api'; // URL của FastAPI backend
+const API_BASE_URL = "http://127.0.0.1:8000/api/v1";
 
-export const predictChurn = async (customerData) => {
+export const predictCustomerChurn = async (customerData) => {
     try {
-        const response = await axios.post(`${API_URL}/predict`, customerData);
-        return response.data; // Trả về { churnProbability, shapValues }
+        const response = await fetch(`${API_BASE_URL}/predict`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(customerData)
+        });
+
+        if (!response.ok) {
+            throw new Error(`Lỗi server: ${response.status}`);
+        }
+
+        const data = await response.json();
+        return data; // Kết quả trả về chứa { is_churn, churn_probability_percent, risk_level }
     } catch (error) {
         console.error("Lỗi khi gọi API dự đoán:", error);
         throw error;

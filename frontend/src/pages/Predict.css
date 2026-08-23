@@ -251,6 +251,23 @@
 /* Responsive */
 @media (max-width: 1024px) {
   .predict-grid {
+  display: grid;
+  /* Mặc định chia 3 cột bằng nhau, khoảng cách 20px */
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+/* Nếu màn hình nhỏ gọn lại thành 1 cột */
+@media (max-width: 1024px) {
+  .predict-grid {
     grid-template-columns: 1fr;
   }
+}
+
+.step-number {
+  background-color: #eff6ff;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
 }
