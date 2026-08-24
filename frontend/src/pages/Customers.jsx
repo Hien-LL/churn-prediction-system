@@ -1,9 +1,72 @@
 import React, { useState } from 'react';
 import { Search, RotateCcw, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { mockCustomers } from '../mockData';
 import ChurnRiskBadge from '../components/common/ChurnRiskBadge';
 import './Customers.css';
+
+// ĐƯA DỮ LIỆU MẪU VÀO ĐÂY ĐỂ ĐỒNG BỘ VỚI TRANG PREDICT
+const mockCustomers = [
+  {
+    id: 'CUST_100023',
+    name: 'Michael Brown',
+    tenure: 2,
+    contractType: 'Month-to-month',
+    internetService: 'Fiber optic',
+    monthlyCharges: 85.50,
+    totalCharges: 171.00,
+    paymentMethod: 'Electronic check',
+    techSupport: 'No',
+    onlineSecurity: 'No',
+    churnProbability: 82,
+    riskLevel: 'High',
+    topDriver: 'Month-to-month Contract'
+  },
+  {
+    id: 'CUST_100089',
+    name: 'Sarah Connor',
+    tenure: 24,
+    contractType: 'One year',
+    internetService: 'DSL',
+    monthlyCharges: 55.00,
+    totalCharges: 1320.00,
+    paymentMethod: 'Credit card',
+    techSupport: 'Yes',
+    onlineSecurity: 'Yes',
+    churnProbability: 15,
+    riskLevel: 'Low',
+    topDriver: '1-Year Contract'
+  },
+  {
+    id: 'CUST_100104',
+    name: 'David Smith',
+    tenure: 6,
+    contractType: 'Month-to-month',
+    internetService: 'Fiber optic',
+    monthlyCharges: 92.30,
+    totalCharges: 553.80,
+    paymentMethod: 'Electronic check',
+    techSupport: 'No',
+    onlineSecurity: 'Yes',
+    churnProbability: 58,
+    riskLevel: 'Medium',
+    topDriver: 'High Monthly Charges'
+  },
+  {
+    id: 'CUST_100215',
+    name: 'Emily Watson',
+    tenure: 48,
+    contractType: 'Two year',
+    internetService: 'Fiber optic',
+    monthlyCharges: 105.00,
+    totalCharges: 5040.00,
+    paymentMethod: 'Bank transfer',
+    techSupport: 'Yes',
+    onlineSecurity: 'Yes',
+    churnProbability: 8,
+    riskLevel: 'Low',
+    topDriver: 'Long Tenure'
+  }
+];
 
 const Customers = () => {
   const navigate = useNavigate();
@@ -112,6 +175,7 @@ const Customers = () => {
                   <td>{customer.tenure}</td>
                   <td>{customer.churnProbability}%</td>
                   <td>
+                    {/* Bọc trong div/span nếu component Badge chưa hoạt động tốt với bảng */}
                     <ChurnRiskBadge level={customer.riskLevel} />
                   </td>
                   <td>{customer.topDriver}</td>
@@ -120,6 +184,14 @@ const Customers = () => {
                       className="action-btn"
                       title="View Details & Predict"
                       onClick={() => navigate('/predict', { state: { customer } })}
+                      style={{
+                        padding: '6px 12px',
+                        backgroundColor: '#eff6ff',
+                        color: '#3b82f6',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: 'pointer'
+                      }}
                     >
                       <Eye size={18} />
                     </button>
@@ -137,11 +209,11 @@ const Customers = () => {
         </table>
 
         {/* 4. Phân Trang (Pagination Giả) */}
-        <div className="pagination">
+        <div className="pagination" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '16px' }}>
           <button className="page-btn" disabled>
             <ChevronLeft size={16} />
           </button>
-          <button className="page-btn active">1</button>
+          <button className="page-btn active" style={{ fontWeight: 'bold' }}>1</button>
           <button className="page-btn">2</button>
           <button className="page-btn">3</button>
           <span>...</span>
