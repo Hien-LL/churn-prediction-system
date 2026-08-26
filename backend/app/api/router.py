@@ -1,21 +1,21 @@
 from fastapi import APIRouter, HTTPException
-from app.models.schemas import CustomerInput, PredictionOutput
+from app.models.schemas import (
+    CustomerInput,
+    PredictionOutput,
+    DashboardResponse,
+)
 from app.services.predictor import model_service
 
 router = APIRouter()
 
 
 @router.get(
-    "/dashboard-summary", summary="Lấy dữ liệu tổng quan cho Dashboard từ CSV"
+    "/dashboard-summary",
+    response_model=DashboardResponse,
+    summary="Lấy dữ liệu tổng quan cho Dashboard từ CSV",
 )
 def get_dashboard_summary():
-  """Đọc dữ liệu từ file CSV mẫu và trả về các chỉ số thống kê tổng quan cho
-  Dashboard.
-
-  - **Summary**: Tổng số khách hàng, số lượng theo từng mức độ rủi ro (High,
-  Medium, Low), doanh thu có rủi ro mất.
-  - **Top Risk Customers**: Danh sách 10 khách hàng có tỉ lệ rời bỏ cao nhất.
-  """
+ 
   try:
     return model_service.get_dashboard_summary()
   except Exception as e:
