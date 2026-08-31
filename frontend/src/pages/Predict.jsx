@@ -5,18 +5,37 @@ import ChurnRiskBadge from '../components/common/ChurnRiskBadge';
 import axios from 'axios';
 import './Predict.css';
 
-// === HÀM RULE ENGINE ĐỀ XUẤT MÃ KHUYẾN MÃI / BỎ TRỢ DỰA TRÊN THỦ PHẠM CHURN ===
+// === HÀM MAP TÊN FEATURE TỪ BACKEND SANG TIẾNG VIỆT ===
+const translateFeatureName = (key, form) => {
+  const dictionary = {
+    'tenure': `Thời gian sử dụng (${form.tenure} tháng)`,
+    'MonthlyCharges': `Cước phí hàng tháng ($${form.monthlyCharges})`,
+    'TotalCharges': `Tổng cước phí ($${form.totalCharges})`,
+    'Contract_Month-to-month': 'Loại hợp đồng (Từng tháng)',
+    'Contract_One year': 'Loại hợp đồng (1 Năm)',
+    'Contract_Two year': 'Loại hợp đồng (2 Năm)',
+    'TechSupport_No': 'Dịch vụ Hỗ trợ Kỹ thuật (Không)',
+    'TechSupport_Yes': 'Dịch vụ Hỗ trợ Kỹ thuật (Có)',
+    'PaymentMethod_Electronic check': 'Hình thức thanh toán (Electronic check)',
+    'InternetService_Fiber optic': 'Dịch vụ Internet (Cáp quang)',
+    'OnlineSecurity_No': 'Bảo mật trực tuyến (Không)'
+  };
+  return dictionary[key] || key; // Giữ nguyên tên gốc nếu chưa có trong từ điển
+};
+
+// === HÀM RULE ENGINE ĐỀ XUẤT MÃ KHUYẾN MÃI DỰA TRÊN THỦ PHẠM CHURN THỰC TẾ ===
 const generateRecommendations = (shapData) => {
   const dynamicActions = [];
   let actionId = 1;
 
+  // Lọc ra các yếu tố làm TĂNG nguy cơ rời bỏ (isPositive = true)
   const riskDrivers = shapData.filter(item => item.isPositive);
 
   riskDrivers.forEach(driver => {
-    const featureName = driver.feature.toLowerCase();
+    // Sử dụng featureKey gốc từ Backend để logic chính xác tuyệt đối
+    const featureKey = driver.featureKey.toLowerCase();
 
-    // Hợp đồng ngắn hạn
-    if (featureName.includes('month-to-month') || featureName.includes('tháng') || featureName.includes('contract')) {
+    if (featureKey.includes('contract_month-to-month')) {
       dynamicActions.push({
         id: actionId++,
         code: 'CONTRACT_1Y_15',
@@ -27,8 +46,7 @@ const generateRecommendations = (shapData) => {
         applied: false
       });
     }
-    // Cước phí cao
-    else if (featureName.includes('monthly charges') || featureName.includes('cước phí')) {
+    else if (featureKey === 'monthlycharges') {
       dynamicActions.push({
         id: actionId++,
         code: 'DISCOUNT_10USD',
@@ -39,8 +57,7 @@ const generateRecommendations = (shapData) => {
         applied: false
       });
     }
-    // Thiếu Tech Support
-    else if (featureName.includes('tech support') || featureName.includes('hỗ trợ')) {
+    else if (featureKey.includes('techsupport_no')) {
       dynamicActions.push({
         id: actionId++,
         code: 'FREE_TECH_6M',
@@ -51,8 +68,7 @@ const generateRecommendations = (shapData) => {
         applied: false
       });
     }
-    // Thanh toán check thủ công
-    else if (featureName.includes('electronic check') || featureName.includes('payment')) {
+    else if (featureKey.includes('paymentmethod_electronic check')) {
       dynamicActions.push({
         id: actionId++,
         code: 'AUTO_PAY_BONUS',
@@ -65,6 +81,7 @@ const generateRecommendations = (shapData) => {
     }
   });
 
+  // Fallback nếu khách hàng rủi ro vì lý do khác không nằm trong Rule Engine
   if (dynamicActions.length === 0) {
     dynamicActions.push({
       id: actionId++,
@@ -122,6 +139,7 @@ const Predict = () => {
     churnProbability: 0,
     riskLevel: 'Low',
   });
+  
   const [shapData, setShapData] = useState([]);
   const [actions, setActions] = useState([]);
 
@@ -165,17 +183,28 @@ const Predict = () => {
         riskLevel: data.risk_level,
       });
 
-      // Tạo SHAP data mô phỏng từ form thực tế
-      const mockShapData = [
-        { feature: `Loại hợp đồng (${formData.contractType})`, impact: 28, isPositive: formData.contractType === 'Month-to-month' },
-        { feature: `Cước phí hàng tháng ($${formData.monthlyCharges})`, impact: 22, isPositive: formData.monthlyCharges > 65 },
-        { feature: `Thời gian sử dụng (${formData.tenure} tháng)`, impact: 18, isPositive: formData.tenure < 12 },
-        { feature: `Dịch vụ Hỗ trợ Kỹ thuật (${formData.techSupport})`, impact: 12, isPositive: formData.techSupport === 'No' },
-        { feature: `Hình thức thanh toán (${formData.paymentMethod})`, impact: 8, isPositive: formData.paymentMethod === 'Electronic check' },
-      ];
+      // LẤY SHAP DATA THỰC TẾ TỪ BACKEND PHÂN TÍCH CHO KHÁCH HÀNG NÀY
+      let realShapData = [];
+      if (data.shap_values) {
+        // Biến đổi object { feature: impact } thành array để map lên UI
+        const shapArray = Object.entries(data.shap_values).map(([key, value]) => {
+          return {
+            featureKey: key, 
+            feature: translateFeatureName(key, formData),
+            impact: parseFloat((Math.abs(value) * 100).toFixed(1)), // Quy đổi ra % tác động để vẽ thanh UI
+            isPositive: value > 0, // value > 0 là làm tăng rủi ro Churn (Đỏ), < 0 làm giảm (Xanh)
+            rawValue: value
+          };
+        });
+
+        // Sắp xếp theo mức độ ảnh hưởng tuyệt đối lớn nhất và lấy Top 5 nguyên nhân
+        realShapData = shapArray
+          .sort((a, b) => Math.abs(b.rawValue) - Math.abs(a.rawValue))
+          .slice(0, 5);
+      }
       
-      setShapData(mockShapData);
-      setActions(generateRecommendations(mockShapData));
+      setShapData(realShapData);
+      setActions(generateRecommendations(realShapData));
       setHasPredicted(true);
     } catch (error) {
       console.error("Lỗi khi gọi API dự đoán:", error);
@@ -202,23 +231,21 @@ const Predict = () => {
 
   return (
     <div className="predict-container" style={{ padding: '24px', maxWidth: '1400px', margin: '0 auto' }}>
-      {/* HEADER TRANG */}
       <div className="predict-header" style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#0f172a', margin: 0 }}>Predict & Retain Customer Churn</h1>
-          <p style={{ color: '#64748b', fontSize: '14px', marginTop: '4px' }}>Dự báo nguy cơ rời bỏ dịch vụ và kích hoạt giải pháp giữ chân khách hàng</p>
+          <p style={{ color: '#64748b', fontSize: '14px', marginTop: '4px' }}>Phân tích nguy cơ rời bỏ dịch vụ 1:1 và kích hoạt giải pháp giữ chân</p>
         </div>
         {hasPredicted && (
           <button 
             onClick={() => setHasPredicted(false)} 
             style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#fff', cursor: 'pointer', fontSize: '14px', fontWeight: '500', color: '#475569' }}
           >
-            <RefreshCw size={16} /> Làm mới Form
+            <RefreshCw size={16} /> Phân tích Khách hàng khác
           </button>
         )}
       </div>
 
-      {/* DYNAMIC GRID LAYOUT */}
       <div 
         className="predict-main-layout"
         style={{
@@ -229,11 +256,11 @@ const Predict = () => {
           transition: 'all 0.4s ease-in-out'
         }}
       >
-        {/* ================= BƯỚC 1: FORM NHẬP THÔNG TIN (LUÔN HIỂN THỊ) ================= */}
+        {/* FORM NHẬP THÔNG TIN CÁ NHÂN */}
         <div className="predict-card" style={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '24px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px', paddingBottom: '12px', borderBottom: '1px solid #f1f5f9' }}>
             <span style={{ backgroundColor: '#eff6ff', color: '#2563eb', fontWeight: 'bold', width: '28px', height: '28px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' }}>1</span>
-            <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: '#1e293b', margin: 0 }}>Thông Tin Khách Hàng</h3>
+            <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: '#1e293b', margin: 0 }}>Thông Tin Từng Khách Hàng</h3>
           </div>
 
           <form onSubmit={handlePredict}>
@@ -307,19 +334,17 @@ const Predict = () => {
               }}
             >
               <Activity size={18} />
-              {isLoading ? 'Đang phân tích dữ liệu AI...' : 'Chạy Dự Đoán Risk Churn'}
+              {isLoading ? 'AI Đang phân tích hồ sơ này...' : 'Phân Tích Khách Hàng Này'}
             </button>
           </form>
         </div>
 
-        {/* ================= BƯỚC 2 + 3 + 4: KẾT QUẢ & PHÂN TÍCH (HIỂN THỊ KHI BẤM PREDICT) ================= */}
+        {/* KẾT QUẢ & PHÂN TÍCH CHUYÊN SÂU */}
         {hasPredicted && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', animation: 'fadeIn 0.5s ease' }}>
             
-            {/* HÀNG TRÊN: BƯỚC 2 (KẾT QUẢ DỰ BÁO) & BƯỚC 3 (GIẢI THÍCH NGUYÊN NHÂN SHAP) */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: '20px' }}>
               
-              {/* BƯỚC 2: KẾT QUẢ DỰ BÁO */}
               <div style={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '20px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
                   <span style={{ backgroundColor: '#eff6ff', color: '#2563eb', fontWeight: 'bold', width: '28px', height: '28px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' }}>2</span>
@@ -336,11 +361,11 @@ const Predict = () => {
                 </div>
               </div>
 
-              {/* BƯỚC 3: PHÂN TÍCH NGUYÊN NHÂN (SHAP VALUES) */}
+              {/* BẢNG SHAP VALUES THỰC TẾ TRẢ TỪ BACKEND */}
               <div style={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '20px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
                   <span style={{ backgroundColor: '#eff6ff', color: '#2563eb', fontWeight: 'bold', width: '28px', height: '28px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' }}>3</span>
-                  <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: '#1e293b', margin: 0 }}>Nguyên Nhân Gây Rủi Ro (SHAP)</h3>
+                  <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: '#1e293b', margin: 0 }}>Phân Tích Nguyên Nhân Khách Hàng Này (SHAP)</h3>
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -349,7 +374,7 @@ const Predict = () => {
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: '500', marginBottom: '4px' }}>
                         <span style={{ color: '#334155' }}>{item.feature}</span>
                         <span style={{ fontWeight: '600', color: item.isPositive ? '#ef4444' : '#10b981' }}>
-                          {item.isPositive ? `+${item.impact}% Risk` : `-${item.impact}% Risk`}
+                          {item.isPositive ? `+${item.impact} Điểm Risk` : `-${item.impact} Điểm Risk`}
                         </span>
                       </div>
                       <div style={{ width: '100%', height: '8px', backgroundColor: '#f1f5f9', borderRadius: '4px', overflow: 'hidden' }}>
@@ -370,11 +395,10 @@ const Predict = () => {
 
             </div>
 
-            {/* BƯỚC 4: DANH SÁCH KHUYẾN MÃI / KỊCH BẢN GIỮ CHÂN */}
             <div style={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '20px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
                 <span style={{ backgroundColor: '#eff6ff', color: '#2563eb', fontWeight: 'bold', width: '28px', height: '28px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' }}>4</span>
-                <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: '#1e293b', margin: 0 }}>Đề Xuất Chương Trình Khuyến Mãi Giữ Chân Khách Hàng</h3>
+                <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: '#1e293b', margin: 0 }}>Kịch Bản Chăm Sóc Đề Xuất Cho Khách Hàng Này</h3>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
