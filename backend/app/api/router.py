@@ -1,3 +1,5 @@
+import os
+import pandas as pd
 from fastapi import APIRouter, HTTPException
 from app.models.schemas import (
     CustomerInput,
@@ -89,4 +91,52 @@ def predict_churn(data: CustomerInput):
         raise HTTPException(
             status_code=500,
             detail=f"Lỗi hệ thống trong quá trình dự đoán: {str(e)}",
+        )
+
+
+@router.get(
+    "/customer/{customer_id}",
+    summary="Tìm kiếm dữ liệu khách hàng theo ID từ file CSV",
+)
+def get_customer_by_id(customer_id: str):
+    """Kéo thông tin chi tiết của 1 khách hàng dựa vào Customer ID để tự động điền Form."""
+    try:
+        # Điều hướng thư mục tới file CSV (Điều chỉnh thư mục nếu project của bạn có cấu trúc khác)
+        BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        data_path = os.path.join(BASE_DIR, "data", "WA_Fn-UseC_-Telco-Customer-Churn.csv")
+        
+        if not os.path.exists(data_path):
+            raise HTTPException(status_code=404, detail="Không tìm thấy file dữ liệu CSV.")
+
+        # Đọc dữ liệu
+        df = pd.read_csv(data_path)
+        
+        # Lọc theo customerID
+        customer = df[df['customerID'] == customer_id]
+        
+        if customer.empty:
+            raise HTTPException(status_code=404, detail="Không tìm thấy khách hàng này.")
+            
+        # Chuyển dòng dữ liệu tìm được thành Dictionary
+        cust_dict = customer.iloc[0].to_dict()
+        
+        # Trả về format chuẩn để điền thẳng vào Form Frontend
+        return {
+            "customerId": cust_dict.get("customerID"),
+            "gender": cust_dict.get("gender"),
+            "tenure": cust_dict.get("tenure"),
+            "contractType": cust_dict.get("Contract"),
+            "internetService": cust_dict.get("InternetService"),
+            "monthlyCharges": cust_dict.get("MonthlyCharges"),
+            "totalCharges": cust_dict.get("TotalCharges"),
+            "paymentMethod": cust_dict.get("PaymentMethod"),
+            "techSupport": cust_dict.get("TechSupport"),
+            "onlineSecurity": cust_dict.get("OnlineSecurity")
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Lỗi khi tra cứu khách hàng: {str(e)}"
         )
