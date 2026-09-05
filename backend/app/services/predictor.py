@@ -25,7 +25,7 @@ class ModelService:
         self.threshold = self.metadata["threshold"]
         self.median_total_charges = self.metadata["median_total_charges"]
 
-        # 3. Khởi tạo SHAP Explainer (khởi tạo 1 lần duy nhất để tối ưu tốc độ)
+        # 3. Khởi tạo SHAP Explainer
         self.explainer = shap.TreeExplainer(self.model)
 
     def preprocess_data(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -45,20 +45,25 @@ class ModelService:
         df_final = df_processed.reindex(columns=self.expected_features, fill_value=0)
         return df_final
 
+    def _get_prediction_prob(self, input_dict: dict) -> float:
+        """Hàm phụ trợ: Trả về duy nhất xác suất Churn để phục vụ việc giả lập nhanh"""
+        df_raw = pd.DataFrame([input_dict])
+        df_transformed = self.preprocess_data(df_raw)
+        return float(self.model.predict_proba(df_transformed)[0][1])
+
     def predict(self, input_dict: dict):
         df_raw = pd.DataFrame([input_dict])
         
-        # Tiền xử lý
+        # Tiền xử lý dữ liệu gốc
         df_transformed = self.preprocess_data(df_raw)
         
-        # Dự đoán xác suất Churn
+        # Dự đoán xác suất Churn gốc
         prob = float(self.model.predict_proba(df_transformed)[0][1])
         prediction = bool(prob >= self.threshold)
+        current_prob_percent = round(prob * 100, 2)
 
         # Tính toán SHAP Values
         shap_raw = self.explainer.shap_values(df_transformed)
-        
-        # Xử lý output SHAP của Random Forest (lấy SHAP value của class Churn = 1)
         if isinstance(shap_raw, list):
             churn_shap = shap_raw[1][0]
         elif isinstance(shap_raw, np.ndarray) and len(shap_raw.shape) == 3:
@@ -66,16 +71,88 @@ class ModelService:
         else:
             churn_shap = shap_raw[0]
 
-        # Map tên feature với giá trị SHAP tương ứng
         shap_dict = {col: float(val) for col, val in zip(df_transformed.columns, churn_shap)}
         
-        
+        # ==============================================================
+        # COUNTERFACTUAL RECOMMENDATION ENGINE (Mô phỏng giả thuyết)
+        # ==============================================================
+        recommendations = []
+
+        # Giả thuyết 1: Thay đổi Hợp đồng sang 1 Năm
+        if input_dict.get('Contract') == 'Month-to-month':
+            sim_dict = input_dict.copy()
+            sim_dict['Contract'] = 'One year'
+            sim_prob = self._get_prediction_prob(sim_dict)
+            sim_prob_percent = round(sim_prob * 100, 2)
+            reduction = round(current_prob_percent - sim_prob_percent, 2)
+            
+            if reduction > 2.0:
+                recommendations.append({
+                    "id": "ACT_CONTRACT",
+                    "code": "CONTRACT_1Y",
+                    "title": "Khuyến mãi chuyển sang Hợp đồng 1 năm",
+                    "desc": "Theo mô phỏng AI, việc khách hàng cam kết gia hạn 12 tháng sẽ làm thay đổi mạnh nhất ý định rời bỏ.",
+                    "impactValue": reduction,
+                    "simulatedProb": sim_prob_percent
+                })
+
+        # Giả thuyết 2: Thêm Dịch vụ Hỗ trợ Kỹ thuật
+        if input_dict.get('TechSupport') == 'No':
+            sim_dict = input_dict.copy()
+            sim_dict['TechSupport'] = 'Yes'
+            sim_prob = self._get_prediction_prob(sim_dict)
+            sim_prob_percent = round(sim_prob * 100, 2)
+            reduction = round(current_prob_percent - sim_prob_percent, 2)
+            
+            if reduction > 1.0:
+                recommendations.append({
+                    "id": "ACT_TECH",
+                    "code": "FREE_TECH_6M",
+                    "title": "Tặng miễn phí Tech Support VIP (6 tháng)",
+                    "desc": "Cung cấp hỗ trợ kỹ thuật kịp thời giúp giảm bớt trở ngại trải nghiệm và rủi ro rời bỏ.",
+                    "impactValue": reduction,
+                    "simulatedProb": sim_prob_percent
+                })
+
+        # Giả thuyết 3: Giảm cước phí 10 USD
+        sim_dict_discount = input_dict.copy()
+        current_charge = float(sim_dict_discount.get('MonthlyCharges', 0))
+        if current_charge > 20: # Chỉ giảm nếu cước đang cao
+            sim_dict_discount['MonthlyCharges'] = max(0, current_charge - 10.0)
+            sim_prob_discount = self._get_prediction_prob(sim_dict_discount)
+            sim_prob_percent_discount = round(sim_prob_discount * 100, 2)
+            reduction_discount = round(current_prob_percent - sim_prob_percent_discount, 2)
+            
+            if reduction_discount > 1.0:
+                recommendations.append({
+                    "id": "ACT_DISCOUNT",
+                    "code": "DISCOUNT_10USD",
+                    "title": "Tặng Voucher giảm giá $10",
+                    "desc": "Giảm áp lực cước phí hàng tháng giúp tăng độ hài lòng về mặt tài chính.",
+                    "impactValue": reduction_discount,
+                    "simulatedProb": sim_prob_percent_discount
+                })
+
+        # Fallback nếu model không tìm thấy thay đổi nào đáng kể
+        if not recommendations:
+            recommendations.append({
+                "id": "ACT_FALLBACK",
+                "code": "VIP_CARE",
+                "title": "Chương trình Tri ân Khách hàng",
+                "desc": "Tặng gói nâng cấp băng thông Internet trong 3 tháng để chăm sóc tiêu chuẩn.",
+                "impactValue": 5.0, # Mức giảm giả định tối thiểu cho fallback
+                "simulatedProb": max(0, round(current_prob_percent - 5.0, 2))
+            })
+
+        # Xếp hạng phương án theo số điểm rủi ro giảm được nhiều nhất
+        recommendations.sort(key=lambda x: x['impactValue'], reverse=True)
 
         return {
             "is_churn": prediction,
-            "churn_probability_percent": round(prob * 100, 2),
+            "churn_probability_percent": current_prob_percent,
             "risk_level": "High" if prob > 0.7 else ("Medium" if prob > self.threshold else "Low"),
-            "shap_values": shap_dict
+            "shap_values": shap_dict,
+            "recommendations": recommendations[:3] # Giới hạn hiển thị 3 kịch bản tốt nhất
         }
     
     def get_dashboard_summary(self):
@@ -87,13 +164,8 @@ class ModelService:
       if not os.path.exists(data_path):
         return {"error": f"Không tìm thấy file CSV tại {data_path}"}
 
-      # 1. Đọc file CSV
       df = pd.read_csv(data_path)
-
-      # 2. Tiền xử lý dữ liệu hàng loạt bằng hàm preprocess_data có sẵn
       df_transformed = self.preprocess_data(df)
-
-      # 3. Dự đoán xác suất rủi ro cho toàn bộ khách hàng
       probs = self.model.predict_proba(df_transformed)[:, 1]
 
       df["churn_probability"] = (probs * 100).round(2)
@@ -105,7 +177,6 @@ class ModelService:
           )
       )
 
-      # 4. Tính toán thống kê tổng quan
       total_customers = len(df)
       high_risk_df = df[df["risk_level"] == "High"]
       high_risk_count = len(high_risk_df)
@@ -117,18 +188,10 @@ class ModelService:
       ).fillna(0)
       revenue_at_risk = monthly_charges[df["risk_level"] == "High"].sum()
 
-      # 5. Top 10 khách hàng rủi ro cao nhất
       select_cols = [
-          c
-          for c in [
-              "customerID",
-              "tenure",
-              "Contract",
-              "MonthlyCharges",
-              "churn_probability",
-              "risk_level",
-          ]
-          if c in df.columns
+          c for c in [
+              "customerID", "tenure", "Contract", "MonthlyCharges", "churn_probability", "risk_level",
+          ] if c in df.columns
       ]
       top_risk_customers = (
           df.sort_values(by="churn_probability", ascending=False)
@@ -144,8 +207,7 @@ class ModelService:
               "low_risk_count": low_risk_count,
               "churn_rate_percent": (
                   round((high_risk_count / total_customers) * 100, 2)
-                  if total_customers > 0
-                  else 0
+                  if total_customers > 0 else 0
               ),
               "monthly_revenue_at_risk": round(float(revenue_at_risk), 2),
           },

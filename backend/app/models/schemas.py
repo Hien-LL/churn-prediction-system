@@ -81,21 +81,30 @@ class CustomerInput(BaseModel):
   }
 
 
+class RecommendationItem(BaseModel):
+    id: str
+    code: str
+    title: str
+    desc: str
+    impactValue: float
+    simulatedProb: float
+
 class PredictionOutput(BaseModel):
-  is_churn: bool = Field(
-      ...,
-      description=(
-          "True if the model predicts the customer will churn based on the"
-          " threshold"
-      ),
-  )
-  churn_probability_percent: float = Field(
-      ..., description="The probability of churning in percentage"
-  )
-  risk_level: str = Field(..., description="Risk category: High, Medium, or Low")
-  shap_values: Optional[Dict[str, float]] = Field(
-      None, description="SHAP feature importances for explanation"
-  )
+    is_churn: bool = Field(
+        ...,
+        description="True if the model predicts the customer will churn based on the threshold",
+    )
+    churn_probability_percent: float = Field(
+        ..., description="The probability of churning in percentage"
+    )
+    risk_level: str = Field(..., description="Risk category: High, Medium, or Low")
+    shap_values: Optional[Dict[str, float]] = Field(
+        None, description="SHAP feature importances for explanation"
+    )
+    # Thêm trường này để Backend trả về mảng đề xuất
+    recommendations: Optional[List[RecommendationItem]] = Field(
+        default=[], description="List of counterfactual recommendations simulated by AI"
+    )
 
 
 # ==========================================
