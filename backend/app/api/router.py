@@ -28,10 +28,11 @@ def get_dashboard_summary():
         else:
             data_dict = raw_data
 
-        # 2. Xử lý an toàn: Lấy số liệu thực tế, nếu Backend chưa tính thì để fallback mặc định
-        total_cust = data_dict.get("total_customers", 7043)
-        churn_rate = data_dict.get("churn_rate", 26.5)
-        high_risk = data_dict.get("high_risk_count", 1869)
+        # 2. Xử lý an toàn: Trích xuất dict "summary" từ predictor.py
+        summary_dict = data_dict.get("summary", {})
+        total_cust = summary_dict.get("total_customers", 7043)
+        churn_rate = summary_dict.get("churn_rate_percent", 26.5)
+        high_risk = summary_dict.get("high_risk_count", 1869)
         
         # 3. Format lại thành cấu trúc JSON chuẩn xác mà UI Dashboard.jsx đang chờ
         formatted_response = {
@@ -99,9 +100,8 @@ def predict_churn(data: CustomerInput):
     summary="Tìm kiếm dữ liệu khách hàng theo ID từ file CSV",
 )
 def get_customer_by_id(customer_id: str):
-    """Kéo thông tin chi tiết của 1 khách hàng dựa vào Customer ID để tự động điền Form."""
+    """Kéo toàn bộ thông tin chi tiết của 1 khách hàng dựa vào Customer ID để tự động điền Form."""
     try:
-        # Điều hướng thư mục tới file CSV (Điều chỉnh thư mục nếu project của bạn có cấu trúc khác)
         BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
         data_path = os.path.join(BASE_DIR, "data", "WA_Fn-UseC_-Telco-Customer-Churn.csv")
         
@@ -117,14 +117,13 @@ def get_customer_by_id(customer_id: str):
         if customer.empty:
             raise HTTPException(status_code=404, detail="Không tìm thấy khách hàng này.")
             
-        # Chuyển dòng dữ liệu tìm được thành Dictionary
+        # Chuyển dòng dữ liệu tìm được thành Dictionary toàn bộ cột
         cust_dict = customer.iloc[0].to_dict()
         
-        # Trả về format chuẩn để điền thẳng vào Form Frontend
-        return {
+        # Trả về toàn bộ dữ liệu CSV gốc kèm theo các alias camelCase mà UI đang sử dụng
+        response_data = {**cust_dict}
+        response_data.update({
             "customerId": cust_dict.get("customerID"),
-            "gender": cust_dict.get("gender"),
-            "tenure": cust_dict.get("tenure"),
             "contractType": cust_dict.get("Contract"),
             "internetService": cust_dict.get("InternetService"),
             "monthlyCharges": cust_dict.get("MonthlyCharges"),
@@ -132,7 +131,9 @@ def get_customer_by_id(customer_id: str):
             "paymentMethod": cust_dict.get("PaymentMethod"),
             "techSupport": cust_dict.get("TechSupport"),
             "onlineSecurity": cust_dict.get("OnlineSecurity")
-        }
+        })
+        
+        return response_data
 
     except HTTPException:
         raise

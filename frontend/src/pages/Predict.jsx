@@ -34,56 +34,87 @@ const Predict = () => {
   const [formData, setFormData] = useState({
     customerId: 'CUST-NEW',
     gender: 'Male',
+    SeniorCitizen: 0,
+    Partner: 'No',
+    Dependents: 'No',
     tenure: 1,
-    contractType: 'Month-to-month',
+    PhoneService: 'Yes',
+    MultipleLines: 'No',
     internetService: 'Fiber optic',
+    onlineSecurity: 'No',
+    OnlineBackup: 'No',
+    DeviceProtection: 'No',
+    techSupport: 'No',
+    StreamingTV: 'No',
+    StreamingMovies: 'No',
+    contractType: 'Month-to-month',
+    PaperlessBilling: 'Yes',
+    paymentMethod: 'Electronic check',
     monthlyCharges: 50.0,
     totalCharges: 50.0,
-    paymentMethod: 'Electronic check',
-    techSupport: 'No',
-    onlineSecurity: 'No',
   });
 
   const [prediction, setPrediction] = useState({ churnProbability: 0, riskLevel: 'Low', originalProb: 0 });
   const [shapData, setShapData] = useState([]);
   const [actions, setActions] = useState([]);
 
-  useEffect(() => {
-    if (selectedCustomer) {
-      populateForm(selectedCustomer);
+  // Hàm dùng chung để fetch 100% dữ liệu gốc từ API theo ID khách hàng
+  const fetchCustomerFullData = async (id, fallbackData) => {
+    setIsSearching(true);
+    try {
+      const response = await axios.get(`http://127.0.0.1:8000/api/v1/customer/${id}`);
+      populateForm(response.data);
+    } catch (error) {
+      console.warn("Không thể tải full data từ API, sử dụng dữ liệu truyền sang", error);
+      if (fallbackData) populateForm(fallbackData);
+      else alert("Không tìm thấy khách hàng này trong hệ thống. Vui lòng kiểm tra lại ID.");
+    } finally {
+      setIsSearching(false);
     }
-  }, [selectedCustomer]);
+  };
 
   const populateForm = (data) => {
     setFormData({
-      customerId: data.id || data.customerId || data.customerID || 'CUST-NEW',
+      customerId: data.customerId || data.customerID || data.id || 'CUST-NEW',
       gender: data.gender || 'Male',
-      tenure: data.tenure || 1,
-      contractType: data.contractType || data.Contract || 'Month-to-month',
+      SeniorCitizen: data.SeniorCitizen ?? 0,
+      Partner: data.Partner || 'No',
+      Dependents: data.Dependents || 'No',
+      tenure: data.tenure ?? 1,
+      PhoneService: data.PhoneService || 'Yes',
+      MultipleLines: data.MultipleLines || 'No',
       internetService: data.internetService || data.InternetService || 'Fiber optic',
-      monthlyCharges: data.monthlyCharges || data.MonthlyCharges || 50.0,
-      totalCharges: data.totalCharges || data.TotalCharges || 50.0,
-      paymentMethod: data.paymentMethod || data.PaymentMethod || 'Electronic check',
-      techSupport: data.techSupport || data.TechSupport || 'No',
       onlineSecurity: data.onlineSecurity || data.OnlineSecurity || 'No',
+      OnlineBackup: data.OnlineBackup || 'No',
+      DeviceProtection: data.DeviceProtection || 'No',
+      techSupport: data.techSupport || data.TechSupport || 'No',
+      StreamingTV: data.StreamingTV || 'No',
+      StreamingMovies: data.StreamingMovies || 'No',
+      contractType: data.contractType || data.Contract || 'Month-to-month',
+      PaperlessBilling: data.PaperlessBilling || 'Yes',
+      paymentMethod: data.paymentMethod || data.PaymentMethod || 'Electronic check',
+      monthlyCharges: data.monthlyCharges ?? data.MonthlyCharges ?? 50.0,
+      totalCharges: data.totalCharges ?? data.TotalCharges ?? 50.0,
     });
-    setSearchId(data.id || data.customerId || data.customerID || '');
+    setSearchId(data.customerId || data.customerID || data.id || '');
     setHasPredicted(false);
   };
+
+  useEffect(() => {
+    if (selectedCustomer) {
+      const custId = selectedCustomer.customerId || selectedCustomer.customerID || selectedCustomer.id;
+      if (custId) {
+        fetchCustomerFullData(custId, selectedCustomer);
+      } else {
+        populateForm(selectedCustomer);
+      }
+    }
+  }, [selectedCustomer]);
 
   const handleSearchCustomer = async (e) => {
     e.preventDefault();
     if (!searchId.trim()) return alert("Vui lòng nhập ID Khách hàng");
-    
-    setIsSearching(true);
-    try {
-      const response = await axios.get(`http://127.0.0.1:8000/api/v1/customer/${searchId.trim()}`);
-      populateForm(response.data);
-    } catch (error) {
-      alert("Không tìm thấy khách hàng này trong hệ thống. Vui lòng kiểm tra lại ID.");
-    } finally {
-      setIsSearching(false);
-    }
+    fetchCustomerFullData(searchId.trim(), null);
   };
 
   const handleChange = (e) => {
@@ -97,25 +128,26 @@ const Predict = () => {
 
     try {
       const payload = {
-        SeniorCitizen: 0,
+        customerID: formData.customerId,
         gender: formData.gender,
-        Partner: "Yes",
-        Dependents: "No",
-        PhoneService: "Yes",
-        MultipleLines: "No",
-        OnlineSecurity: formData.onlineSecurity || "No",
-        OnlineBackup: "Yes",
-        DeviceProtection: "No",
-        StreamingTV: "Yes",
-        StreamingMovies: "No",
-        PaperlessBilling: "Yes",
+        SeniorCitizen: Number(formData.SeniorCitizen),
+        Partner: formData.Partner,
+        Dependents: formData.Dependents,
         tenure: Number(formData.tenure),
-        MonthlyCharges: Number(formData.monthlyCharges),
-        TotalCharges: Number(formData.totalCharges),
-        Contract: formData.contractType,
+        PhoneService: formData.PhoneService,
+        MultipleLines: formData.MultipleLines,
         InternetService: formData.internetService,
+        OnlineSecurity: formData.onlineSecurity,
+        OnlineBackup: formData.OnlineBackup,
+        DeviceProtection: formData.DeviceProtection,
         TechSupport: formData.techSupport,
-        PaymentMethod: formData.paymentMethod
+        StreamingTV: formData.StreamingTV,
+        StreamingMovies: formData.StreamingMovies,
+        Contract: formData.contractType,
+        PaperlessBilling: formData.PaperlessBilling,
+        PaymentMethod: formData.paymentMethod,
+        MonthlyCharges: Number(formData.monthlyCharges),
+        TotalCharges: Number(formData.totalCharges)
       };
 
       const response = await axios.post('http://127.0.0.1:8000/api/v1/predict', payload);
@@ -123,7 +155,7 @@ const Predict = () => {
       
       setPrediction({
         churnProbability: data.churn_probability_percent,
-        originalProb: data.churn_probability_percent, // Lưu lại mốc ban đầu để so sánh
+        originalProb: data.churn_probability_percent,
         riskLevel: data.risk_level,
       });
 
@@ -140,7 +172,6 @@ const Predict = () => {
         setShapData(shapArray.sort((a, b) => Math.abs(b.rawValue) - Math.abs(a.rawValue)).slice(0, 5));
       }
       
-      // Lấy trực tiếp danh sách action sinh ra từ AI Backend
       if (data.recommendations) {
         setActions(data.recommendations.map(act => ({ ...act, applied: false })));
       } else {
@@ -160,7 +191,6 @@ const Predict = () => {
     const appliedAction = actions.find(a => a.id === id);
     if (appliedAction) {
       setPrediction(prev => {
-        // Cập nhật tỷ lệ risk đúng bằng con số backend đã mô phỏng
         const newProb = appliedAction.simulatedProb;
         return { 
           ...prev,
@@ -194,7 +224,6 @@ const Predict = () => {
             <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: '#1e293b', margin: 0 }}>Hồ Sơ Khách Hàng</h3>
           </div>
 
-          {/* KHU VỰC TÌM KIẾM THEO ID */}
           <form onSubmit={handleSearchCustomer} style={{ marginBottom: '24px' }}>
             <label style={{ fontSize: '14px', fontWeight: '700', color: '#2563eb', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
               <User size={16} /> Tìm kiếm Customer ID
@@ -217,7 +246,6 @@ const Predict = () => {
             </div>
           </form>
 
-          {/* FORM CHÍNH THỨC */}
           <form onSubmit={handlePredict}>
             <div style={{ display: 'grid', gridTemplateColumns: hasPredicted ? '1fr' : '1fr 1fr', gap: '16px' }}>
               <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -321,7 +349,6 @@ const Predict = () => {
               </div>
             </div>
 
-            {/* BẢNG ĐỀ XUẤT COUNTERFACTUAL ĐỘNG TỪ AI */}
             <div style={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '20px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
                 <span style={{ backgroundColor: '#eff6ff', color: '#2563eb', fontWeight: 'bold', width: '28px', height: '28px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' }}>4</span>
@@ -329,7 +356,7 @@ const Predict = () => {
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
                 {actions.map((act) => (
-                  <div key={act.id} style={{ border: act.applied ? '1px solid #86efac' : '1px solid #cbd5e1', backgroundColor: act.applied ? '#f0fdf4' : '#f8fafc', borderRadius: '8px', padding: '16px', display: 'flex', flexDirection: 'column', justify: 'space-between', transition: 'all 0.3s' }}>
+                  <div key={act.id} style={{ border: act.applied ? '1px solid #86efac' : '1px solid #cbd5e1', backgroundColor: act.applied ? '#f0fdf4' : '#f8fafc', borderRadius: '8px', padding: '16px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', transition: 'all 0.3s' }}>
                     <div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                         <span style={{ fontSize: '11px', fontWeight: '700', padding: '4px 8px', borderRadius: '4px', backgroundColor: '#e0e7ff', color: '#4338ca', display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -337,7 +364,6 @@ const Predict = () => {
                         </span>
                       </div>
 
-                      {/* Hiển thị con số mô phỏng từ Backend thay vì fix cứng */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', backgroundColor: '#fff', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
                         <span style={{ fontSize: '14px', fontWeight: '700', color: '#ef4444' }}>{prediction.originalProb}%</span>
                         <ArrowRight size={14} color="#64748b"/>
